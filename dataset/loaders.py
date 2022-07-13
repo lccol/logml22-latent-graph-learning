@@ -2,11 +2,15 @@ import numpy as np
 import pandas as pd
 
 from torch.utils.data import Dataset
-from typing import Union, Dict, List, Tuple, Optional
+from typing import Union, Dict, List, Tuple, Optional, Set
 from pathlib import Path
 
 class ECGDataset(Dataset):
-    def __init__(self, folder: Union[Path, str], diagnostic_path: Union[Path, str], ts_duration: Optional[int]=None) -> None:
+    def __init__(self, 
+                folder: Union[Path, str], 
+                diagnostic_path: Union[Path, str], 
+                ts_duration: Optional[int]=None,
+                file_set: Optional[Set[str]]=None) -> None:
         super().__init__()
         if isinstance(folder, str):
             folder = Path(folder)
@@ -18,7 +22,11 @@ class ECGDataset(Dataset):
         self.folder = folder
         self.diagnostic_path = diagnostic_path
         self.ts_duration = ts_duration
+        self.file_set = file_set
+
         self.patient_data = pd.read_excel(diagnostic_path)
+        if not self.file_set is None:
+            self.patient_data = self.patient_data[self.patient_data['FileName'].isin(file_set)]
         self.ecg_list, self.labels = self.read_ecgs()
         return
 
