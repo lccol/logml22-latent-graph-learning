@@ -8,7 +8,9 @@ from pathlib import Path
 class ECGDataset(Dataset):
     def __init__(self, 
                 folder: Union[Path, str], 
-                diagnostic_path: Union[Path, str], 
+                diagnostic_path: Union[Path, str],
+                target_class_mapper: Optional[Dict[str, int]]=None,
+                target_column: str='Rhythm',
                 ts_duration: Optional[int]=None,
                 ignore_invalid_splits: Optional[bool]=False,
                 file_set: Optional[Set[str]]=None,
@@ -24,6 +26,8 @@ class ECGDataset(Dataset):
 
         self.folder = folder
         self.diagnostic_path = diagnostic_path
+        self.target_class_mapper = target_class_mapper
+        self.target_column = target_column
         self.ts_duration = ts_duration
         self.ignore_invalid_splits = ignore_invalid_splits # if True, ignore files for which df.shape[0] % ts_duration != 0
         self.file_set = file_set
@@ -37,6 +41,9 @@ class ECGDataset(Dataset):
             else:
                 args = (None, sample)
             self.patient_data = self.patient_data.sample(*args, random_state=seed)
+
+        if not target_class_mapper is None:
+            self.patient_data[target_column] = self.patient_data[target_column].replace(target_class_mapper)
         if not self.file_set is None:
             self.patient_data = self.patient_data[self.patient_data['FileName'].isin(file_set)]
         self.ecg_list, self.labels = self.read_ecgs()
@@ -47,7 +54,7 @@ class ECGDataset(Dataset):
         labels = []
         for _, row in self.patient_data.iterrows():
             filename = row['FileName'] + '.csv'
-            original_label = row['Rhythm']
+            original_label = row[self.target_column]
             fullpath = self.folder / filename
             assert fullpath.is_file()
 
