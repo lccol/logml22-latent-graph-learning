@@ -57,10 +57,10 @@ class ECGDataset(Dataset):
                 data.append(X)
                 labels.append(original_label)
             else:
-                if not X.shape[0] % self.ts_duration == 0 and not self.ignore_invalid_splits:
+                if X.shape[0] % self.ts_duration != 0 and not self.ignore_invalid_splits:
                     raise ValueError(f'Error when reading {fullpath.stem} file: shape {X.shape} but ts_duration is {self.ts_duration}')
                     # assert X.shape[0] // self.ts_duration == 0 # check if the lines are a multiple of ts_duration
-                if self.ignore_invalid_splits:
+                if X.shape[0] % self.ts_duration != 0 and self.ignore_invalid_splits:
                     print(f'WARNING: ignoring file {fullpath.stem} because the number of rows ({X.shape[0]}) is not a multiple of {self.ts_duration}!')
                     continue
                 sections = X.shape[0] // self.ts_duration
