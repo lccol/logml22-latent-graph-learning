@@ -8,9 +8,14 @@ from pathlib import Path
 class ECGDataset(Dataset):
     def __init__(self, 
                 folder: Union[Path, str], 
-                diagnostic_path: Union[Path, str], 
+                diagnostic_path: Union[Path, str],
+                target_class_mapper: Optional[Dict[str, int]]=None,
+                target_column: str='Rhythm',
                 ts_duration: Optional[int]=None,
-                file_set: Optional[Set[str]]=None) -> None:
+                ignore_invalid_splits: Optional[bool]=False,
+                file_set: Optional[Set[str]]=None,
+                sample: Optional[Union[int, float]]=None,
+                seed: Optional[int]=None) -> None:
         super().__init__()
         if isinstance(folder, str):
             folder = Path(folder)
@@ -21,10 +26,24 @@ class ECGDataset(Dataset):
 
         self.folder = folder
         self.diagnostic_path = diagnostic_path
+        self.target_class_mapper = target_class_mapper
+        self.target_column = target_column
         self.ts_duration = ts_duration
+        self.ignore_invalid_splits = ignore_invalid_splits # if True, ignore files for which df.shape[0] % ts_duration != 0
         self.file_set = file_set
+        self.sample = sample # randomly samples just few files instead of all of them
+        self.seed = seed
 
         self.patient_data = pd.read_excel(diagnostic_path)
+        if not sample is None:
+            if isinstance(sample, int):
+                args = (sample, None)
+            else:
+                args = (None, sample)
+            self.patient_data = self.patient_data.sample(*args, random_state=seed)
+
+        if not target_class_mapper is None:
+            self.patient_data[target_column] = self.patient_data[target_column].replace(target_class_mapper)
         if not self.file_set is None:
             self.patient_data = self.patient_data[self.patient_data['FileName'].isin(file_set)]
         self.ecg_list, self.labels = self.read_ecgs()
@@ -35,7 +54,7 @@ class ECGDataset(Dataset):
         labels = []
         for _, row in self.patient_data.iterrows():
             filename = row['FileName'] + '.csv'
-            original_label = row['Rhythm']
+            original_label = row[self.target_column]
             fullpath = self.folder / filename
             assert fullpath.is_file()
 
@@ -45,8 +64,13 @@ class ECGDataset(Dataset):
                 data.append(X)
                 labels.append(original_label)
             else:
-                assert X.shape[0] // self.ts_duration == 0 # check if the lines are a multiple of ts_duration
-                sections = X.shape[0] / self.ts_duration
+                if X.shape[0] % self.ts_duration != 0 and not self.ignore_invalid_splits:
+                    raise ValueError(f'Error when reading {fullpath.stem} file: shape {X.shape} but ts_duration is {self.ts_duration}')
+                    # assert X.shape[0] // self.ts_duration == 0 # check if the lines are a multiple of ts_duration
+                if X.shape[0] % self.ts_duration != 0 and self.ignore_invalid_splits:
+                    print(f'WARNING: ignoring file {fullpath.stem} because the number of rows ({X.shape[0]}) is not a multiple of {self.ts_duration}!')
+                    continue
+                sections = X.shape[0] // self.ts_duration
 
                 data.extend(np.split(X, sections, axis=0))
                 labels.extend([original_label for _ in range(sections)])
