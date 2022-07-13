@@ -6,7 +6,7 @@ from typing import Union, Dict, List, Tuple, Optional
 from pathlib import Path
 
 class ECGDataset(Dataset):
-    def __init__(self, folder: Union[Path, str], diagnostic_path: Union[Path, str]) -> None:
+    def __init__(self, folder: Union[Path, str], diagnostic_path: Union[Path, str], ts_duration: Optional[int]=None) -> None:
         super().__init__()
         if isinstance(folder, str):
             folder = Path(folder)
@@ -17,20 +17,33 @@ class ECGDataset(Dataset):
 
         self.folder = folder
         self.diagnostic_path = diagnostic_path
+        self.ts_duration = ts_duration
         self.patient_data = pd.read_excel(diagnostic_path)
-        self.ecg_list = self.read_ecgs()
-        self.labels = self.patient_data['Rhythm'].values
+        self.ecg_list, self.labels = self.read_ecgs()
         return
 
-    def read_ecgs(self) -> List[np.ndarray]:
-        res = []
+    def read_ecgs(self) -> Tuple[List[np.ndarray], np.ndarray]:
+        data = []
+        labels = []
         for _, row in self.patient_data.iterrows():
             filename = row['FileName'] + '.csv'
+            original_label = row['Rhythm']
             fullpath = self.folder / filename
             assert fullpath.is_file()
 
-            res.append(pd.read_csv(fullpath, header=None).values)
-        return res
+            X = pd.read_csv(fullpath, header=None).values
+            if self.ts_duration is None:
+                # simply append the entire numpy array as it is
+                data.append(X)
+                labels.append(original_label)
+            else:
+                assert X.shape[0] // self.ts_duration == 0 # check if the lines are a multiple of ts_duration
+                sections = X.shape[0] / self.ts_duration
+
+                data.extend(np.split(X, sections, axis=0))
+                labels.extend([original_label for _ in range(sections)])
+
+        return data, np.array(labels)
     
     def __len__(self) -> int:
         return len(self.ecg_list)
