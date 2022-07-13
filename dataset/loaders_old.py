@@ -48,7 +48,7 @@ class ECGDataset(Dataset):
                 if not X.shape[0] % self.ts_duration == 0:
                     raise ValueError(f'Error when reading {fullpath.stem} file: shape {X.shape} but ts_duration is {self.ts_duration}')
                     # assert X.shape[0] // self.ts_duration == 0 # check if the lines are a multiple of ts_duration
-                sections = X.shape[0] / self.ts_duration
+                sections = X.shape[0] // self.ts_duration
 
                 data.extend(np.split(X, sections, axis=0))
                 labels.extend([original_label for _ in range(sections)])
