@@ -2,7 +2,7 @@
 Code repository for the "Latent Graph Learning for Multivariate Time Series" project in LOGML 2022 Summer School
 
 **Team Composition**:  
-**Mentor**: Dr. [Xiang Zhang] (http://xiangzhang.info/)  
+**Mentor**: Dr. [Xiang Zhang](http://xiangzhang.info/)  
 **Members**:
  - Akanksha Ahuja
  - Luca Colomba
