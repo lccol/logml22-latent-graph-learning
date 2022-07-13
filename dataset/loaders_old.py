@@ -10,7 +10,10 @@ class ECGDataset(Dataset):
                 folder: Union[Path, str], 
                 diagnostic_path: Union[Path, str], 
                 ts_duration: Optional[int]=None,
-                file_set: Optional[Set[str]]=None) -> None:
+                ignore_invalid_splits: Optional[bool]=False,
+                file_set: Optional[Set[str]]=None,
+                sample: Optional[Union[int, float]]=None,
+                seed: Optional[int]=None) -> None:
         super().__init__()
         if isinstance(folder, str):
             folder = Path(folder)
@@ -22,9 +25,18 @@ class ECGDataset(Dataset):
         self.folder = folder
         self.diagnostic_path = diagnostic_path
         self.ts_duration = ts_duration
+        self.ignore_invalid_splits = ignore_invalid_splits # if True, ignore files for which df.shape[0] % ts_duration != 0
         self.file_set = file_set
+        self.sample = sample # randomly samples just few files instead of all of them
+        self.seed = seed
 
         self.patient_data = pd.read_excel(diagnostic_path)
+        if not sample is None:
+            if isinstance(sample, int):
+                args = (sample, None)
+            else:
+                args = (None, sample)
+            self.patient_data = self.patient_data.sample(*args, random_state=seed)
         if not self.file_set is None:
             self.patient_data = self.patient_data[self.patient_data['FileName'].isin(file_set)]
         self.ecg_list, self.labels = self.read_ecgs()
@@ -45,9 +57,12 @@ class ECGDataset(Dataset):
                 data.append(X)
                 labels.append(original_label)
             else:
-                if not X.shape[0] % self.ts_duration == 0:
+                if not X.shape[0] % self.ts_duration == 0 and not self.ignore_invalid_splits:
                     raise ValueError(f'Error when reading {fullpath.stem} file: shape {X.shape} but ts_duration is {self.ts_duration}')
                     # assert X.shape[0] // self.ts_duration == 0 # check if the lines are a multiple of ts_duration
+                if self.ignore_invalid_splits:
+                    print(f'WARNING: ignoring file {fullpath.stem} because the number of rows ({X.shape[0]}) is not a multiple of {self.ts_duration}!')
+                    continue
                 sections = X.shape[0] // self.ts_duration
 
                 data.extend(np.split(X, sections, axis=0))
