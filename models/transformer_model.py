@@ -73,3 +73,37 @@ class TransformerClassifier(nn.Module):
         # Shape (decoder) -> (batch size, d_model)
         # For binary classification, if for multi-class, should change it to softmax.
         return torch.sigmoid(self.decoder(output.mean(0)))
+    
+class TransformerEnc(nn.Module):
+    def __init__(self,
+                 trg_vocab_size,
+                 d_model,
+                 dropout,
+                 n_head,
+                 dim_feedforward,
+                 n_layers
+                ):
+        super().__init__()
+
+        # self.src_inp_emb = InputEmbedding(src_vocab_size, d_model)
+        # self.trg_inp_emb = InputEmbedding(trg_vocab_size, d_model)
+
+        self.positional_encoding = PositionalEncoding(d_model, dropout=dropout)
+
+        # Only using Encoder of Transformer model
+        encoder_layers = nn.TransformerEncoderLayer(d_model, n_head, dim_feedforward, dropout)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layers, n_layers)
+
+        self.d_model = d_model
+        return
+
+    def forward(self, x):
+        x_emb = self.positional_encoding(x)
+        # Shape (output) -> (Sequence length, batch size, d_model)
+        output = self.transformer_encoder(x_emb)
+        # We want our output to be in the shape of (batch size, d_model) so that
+        # we can use it with CrossEntropyLoss hence averaging using first (Sequence length) dimension
+        # Shape (mean) -> (batch size, d_model)
+        # Shape (decoder) -> (batch size, d_model)
+        # For binary classification, if for multi-class, should change it to softmax.
+        return out
