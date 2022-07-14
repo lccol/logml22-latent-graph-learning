@@ -223,6 +223,7 @@ class GATConvLSTM(MessagePassing):
         edge_dim: Optional[int] = None,
         fill_value: Union[float, Tensor, str] = 'mean',
         bias: bool = True,
+        bidirectional: bool=True,
         **kwargs,
     ):
         kwargs.setdefault('aggr', 'add')
@@ -237,16 +238,17 @@ class GATConvLSTM(MessagePassing):
         self.add_self_loops = add_self_loops
         self.edge_dim = edge_dim
         self.fill_value = fill_value
+        self.bidirectional = bidirectional
 
         # In case we are operating in bipartite graphs, we apply separate
         # transformations 'lin_src' and 'lin_dst' to source and target nodes:
         if isinstance(in_channels, int):
             self.lin_src = nn.LSTM(in_channels, heads * out_channels,
-                                  bias=False)
+                                  bias=False, batch_first=True, bidirectional=bidirectional)
             self.lin_dst = self.lin_src
         else:
-            self.lin_src = nn.LSTM(in_channels[0], heads * out_channels, False)
-            self.lin_dst = nn.LSTM(in_channels[1], heads * out_channels, False)
+            self.lin_src = nn.LSTM(in_channels[0], heads * out_channels, False, batch_first=True, bidirectional=bidirectional)
+            self.lin_dst = nn.LSTM(in_channels[1], heads * out_channels, False, batch_first=True, bidirectional=bidirectional)
 
         # The learnable parameters to compute attention coefficients:
         self.att_src = Parameter(torch.Tensor(1, heads, out_channels))
@@ -307,13 +309,20 @@ class GATConvLSTM(MessagePassing):
         # transform source and target node features via separate weights:
         if isinstance(x, Tensor):
             assert x.dim() == 2, "Static graphs not supported in 'GATConv'"
-            x_src = x_dst = self.lin_src(x)[-1][0].view(-1, H, C)
+            # cast x of shape [NNodes, NSamples] to [NNodes, NSamples, 1]
+            # and keep only the hidden states
+            x = x.unsqueeze(dim=-1)
+            x_src = x_dst = self.lin_src(x)[-1][0].mean(dim=0).view(-1, H, C)
         else:  # Tuple of source and target node features:
-            x_src, x_dst = x
             assert x_src.dim() == 2, "Static graphs not supported in 'GATConv'"
-            x_src = self.lin_src(x_src)[-1][0].view(-1, H, C)
+            # cast x of shape [NNodes, NSamples] to [NNodes, NSamples, 1]
+            # and keep only the hidden states
+            x = x.unsqueeze(dim=-1)
+            x_src, x_dst = x
+            # compute the mean over the first dimension of the hidden state
+            x_src = self.lin_src(x_src)[-1][0].mean(dim=0).view(-1, H, C)
             if x_dst is not None:
-                x_dst = self.lin_dst(x_dst)[-1][0].view(-1, H, C)
+                x_dst = self.lin_dst(x_dst)[-1][0].mean(dim=0).view(-1, H, C)
 
         x = (x_src, x_dst)
 
